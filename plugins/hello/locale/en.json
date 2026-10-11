@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin workshop sample",
+    "description": "Draws a theme-aware badge row below the composer to verify the plugin install path."
+  }
+}

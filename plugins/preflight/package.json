@@ -1,0 +1,28 @@
+{
+  "name": "@yhb/dsh-plugin-preflight",
+  "version": "0.1.0",
+  "private": true,
+  "description": "在 DSH 装载一个插件之前静态审查它：找出会让 DSH 起不来或崩溃的写法。",
+  "type": "module",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./lib/*": "./lib/*"
+  },
+  "files": [
+    "index.js",
+    "lib/**/*.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json"
+  ],
+  "peerDependencies": {},
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  }
+}

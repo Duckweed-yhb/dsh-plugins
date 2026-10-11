@@ -1,0 +1,58 @@
+{
+  "entries": [
+    {
+      "name": "@linxin666/dsh-client-ui-market",
+      "version": "0.4.6",
+      "license": "BSD-3-Clause",
+      "fileCount": 10,
+      "dir": "@linxin666+dsh-client-ui-market",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T12:38:18.251Z"
+    },
+    {
+      "name": "@linxin666/dsh-client-ui-skin-center",
+      "version": "0.4.6",
+      "license": "Apache-2.0",
+      "fileCount": 25,
+      "dir": "@linxin666+dsh-client-ui-skin-center",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T12:38:15.923Z"
+    },
+    {
+      "name": "@linxin666/dsh-client-ui-web-ui-settings",
+      "version": "0.4.6",
+      "license": "Apache-2.0",
+      "fileCount": 10,
+      "dir": "@linxin666+dsh-client-ui-web-ui-settings",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T12:38:17.318Z"
+    },
+    {
+      "name": "@linxin666/dsh-pet",
+      "version": "0.4.6",
+      "license": "Apache-2.0",
+      "fileCount": 318,
+      "dir": "@linxin666+dsh-pet",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T12:39:40.658Z"
+    },
+    {
+      "name": "dsh-plugin-gate",
+      "version": "1.3.2",
+      "license": "MIT",
+      "fileCount": 15,
+      "dir": "dsh-plugin-gate",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T12:38:21.382Z"
+    },
+    {
+      "name": "dshmarket",
+      "version": "1.66.15",
+      "license": "MIT",
+      "fileCount": 177,
+      "dir": "dshmarket",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T12:38:20.662Z"
+    }
+  ]
+}

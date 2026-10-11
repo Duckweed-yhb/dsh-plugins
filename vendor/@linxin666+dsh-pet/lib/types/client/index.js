@@ -1,0 +1,632 @@
+/**
+ * dsh-pet browser half — mounts the selected pet as a global floating
+ * surface and drives it from the host's same-origin '/api/pet/*' JSON
+ * endpoints: fetch the registry list once, poll the host snapshot (~2 s),
+ * forward interactions, persist drag positions. The pet is host-global (no
+ * session dimension), so it mounts directly onto 'document.body' via a
+ * single React root — the [data-dsh-plugin="pet"] container — rather than a
+ * session-scoped slot: on the new-conversation screen no session exists, and
+ * a dock-mounted pet would vanish there (issue #48). The sprite chrome
+ * portals into that same root, so the root owns the whole surface and a
+ * root-keyed suppressor can hide it as one unit. When the pet is hidden the
+ * entry becomes a fixed-position summon button.
+ * @module @linxin666/dsh-pet/client
+ */
+import { createElement } from 'react';
+import { createRoot } from 'react-dom/client';
+import { createPetStore } from "./pet-store.js";
+import { createWorkTickGate } from "./work-tick-gate.js";
+import { PetDockEntry } from "./PetDockEntry.js";
+import { defaultPetRendererRegistry } from "./renderers/registry.js";
+import { live2dRenderer } from "./renderers/live2d.js";
+import { frames2dRenderer } from "./renderers/frames2d.js";
+import { registerPetUiTeardown, takeoverPetUiTeardown } from "./ui-teardown.js";
+import { PetSettingsSection, PetSettingsCardController } from "./PetSettingsCard.js";
+import { NS, en, zh } from "./locales.js";
+import { mainViewSessionId } from "./main-session.js";
+import { reportDailyHeartbeat } from "./telemetry.js";
+/** Same-origin JSON fetch helper (GET without body, POST with JSON body). */
+async function petFetch(path, body) {
+    const response = await fetch(path, body === undefined
+        ? {}
+        : {
+            method: 'POST',
+            headers: { 'content-type': 'application/json' },
+            body: JSON.stringify(body),
+        });
+    if (!response.ok) {
+        throw new Error('pet ' + path + ' failed: ' + response.status);
+    }
+    return (await response.json());
+}
+/** The live host API instance (always defined; failures surface per call). */
+const petApi = {
+    state: (currentSessionId) => petFetch('/api/pet/state'
+        + (currentSessionId === undefined ? '' : '?current=' + encodeURIComponent(currentSessionId))),
+    pets: () => petFetch('/api/pet/pets'),
+    interact: (kind) => petFetch('/api/pet/interact', { kind }),
+    setVisible: (visible) => petFetch('/api/pet/set-visible', { visible }),
+    setConfig: (patch) => petFetch('/api/pet/set-config', patch),
+    setName: (name) => petFetch('/api/pet/set-name', { name }),
+    setPet: (petId) => petFetch('/api/pet/set-pet', { petId }),
+    panelAction: (id) => petFetch('/api/pet/panel-action', { id }),
+    setSkin: (skin) => petFetch('/api/pet/set-skin', skin === undefined ? {} : { skin }),
+    gameplayTouch: (zone) => petFetch('/api/pet/gameplay/touch', zone === undefined ? {} : { zone }),
+    gameplaySetMode: (mode) => petFetch('/api/pet/gameplay/mode', { mode }),
+    gameplayWorkTick: () => petFetch('/api/pet/gameplay/work-tick', {}),
+    gameplayBuy: (item) => petFetch('/api/pet/gameplay/buy', { item }),
+};
+/** Poll interval for the host snapshot. */
+const POLL_MS = 2000;
+/** Settings namespace of the pet's settings page. It is the profile entry id the Host serves a form for. */
+const PET_SETTINGS_NS = 'pet';
+/** Required services (sessions powers bubble-to-session navigation). */
+export const inject = ['slots', 'locale', 'connection', 'configForms', 'remote', 'sessions', 'uiWorkspace'];
+/**
+ * The profile entry ids a pet install is served under, most specific first. The
+ * family bundle renames child rows, so a standalone install and an aggregate
+ * one answer to different ids for the same 'pet' namespace.
+ */
+const AGGREGATE_ENTRY_ID = 'web-ui-pet';
+const PET_ENTRY_IDS = [AGGREGATE_ENTRY_ID, 'ui-pet', PET_SETTINGS_NS];
+/** How long the deferred form keeps retrying before it settles on the fallback. */
+export const BINDER_RETRY_MS = 250;
+const BINDER_ATTEMPTS = 24;
+/** The snapshot an unresolved (or resolvable-but-unbound) form publishes. */
+function pendingSnapshot(status) {
+    return { status, value: undefined, base: undefined, user: undefined, revision: undefined, writable: false, mode: 'host' };
+}
+/**
+ * A ConfigForm that late-binds to the family settings binder.
+ *
+ * The binder service (dsh-web-settings) is not guaranteed to be published by the
+ * time this plugin's apply() runs: the aggregate bundle mounts its inlined
+ * children — including the binder — inside an async mount that awaits the
+ * active-rows fetch, while standalone loader entries like this one apply
+ * synchronously in that window. A single early probe then permanently falls
+ * back to `configForms.get('pet')`, which is never a served row id under the
+ * aggregate (the row is `web-ui-pet`), so the settings card renders "not
+ * exposed" forever even though the Host serves the namespace.
+ *
+ * This form resolves through the binder as soon as the service appears and
+ * delegates the whole ConfigForm surface to it, re-publishing to its own
+ * subscribers on every swap. Until a form is resolved it publishes a loading
+ * (then unavailable) snapshot so the card shows a transient state, never a
+ * false "not exposed". If the binder never appears it retries for a bounded
+ * window, then permanently binds the non-bridge fallback by SERVED entry id.
+ */
+class DeferredSettingsForm {
+    ctx;
+    current;
+    listeners = new Set();
+    unsubscribeCurrent;
+    retryTimer;
+    attempts = 0;
+    disposed = false;
+    fallback;
+    fallbackUnsubscribe;
+    constructor(ctx) {
+        this.ctx = ctx;
+        this.fallback = ctx.configForms.get(this.resolveFallbackEntryId());
+        // No binder yet: the aggregate publishes it after an async mount, so keep
+        // probing. A shared form that can already answer for itself is adopted at
+        // once; one still loading has simply not been filled in yet.
+        if (!this.resolve() && !this.fallbackSettled())
+            this.scheduleRetry();
+        else if (this.current === undefined)
+            this.adoptFallback();
+    }
+    /**
+     * True only once the shared mirror answers for the pet namespace itself.
+     *
+     * 'ready' is the only state that answers (#1813). A host-persisted row starts
+     * out as 'loading' — the mirror has published no view yet — and that is not
+     * an answer: adopting it on sight drops the retry window, and under the
+     * aggregate, which serves only the renamed 'web-ui-pet' row, the form then
+     * settles into 'unavailable' and the page stays "not exposed" for good. So
+     * 'loading' and 'unavailable' both keep the window open and let the binder be
+     * adopted the moment the aggregate publishes it.
+     */
+    fallbackSettled() {
+        try {
+            return this.fallback.getSnapshot().status === 'ready';
+        }
+        catch {
+            return false;
+        }
+    }
+    /**
+     * Bind the fallback to a SERVED row id when the mirror can name one; a mirror
+     * that cannot is left to report its own unavailable state.
+     */
+    resolveFallbackEntryId() {
+        try {
+            const served = this.ctx.configForms.describe().getSnapshot().view?.namespaces.map(view => view.ns);
+            if (served && served.length > 0) {
+                const hit = PET_ENTRY_IDS.find(id => served.includes(id));
+                if (hit !== undefined)
+                    return hit;
+            }
+        }
+        catch {
+            // fall through to the family namespace; the form reports unavailable.
+        }
+        return PET_SETTINGS_NS;
+    }
+    /**
+     * Adopt the family binder the moment it is published.
+     * @returns true when a binder was bound, false when none is available yet.
+     */
+    resolve() {
+        if (this.disposed)
+            return false;
+        let binder;
+        try {
+            binder = this.ctx.get('webUiSettings');
+        }
+        catch {
+            binder = undefined;
+        }
+        if (binder === undefined || typeof binder.bind !== 'function')
+            return false;
+        let bound;
+        try {
+            bound = binder
+                .bind({ namespace: PET_SETTINGS_NS });
+        }
+        catch {
+            return false;
+        }
+        this.current = bound;
+        // Mirror the bound form's changes to our own subscribers; a later re-resolve
+        // swaps this subscription to the new form.
+        this.unsubscribeCurrent?.();
+        this.unsubscribeCurrent = bound.subscribe(() => this.publish());
+        this.publish();
+        return true;
+    }
+    /**
+     * Adopt the shared per-entry form. It is used immediately unless it cannot
+     * answer yet (still loading, or reporting the namespace unavailable), in which
+     * case the binder may still be on its way and the retry window takes over
+     * (see scheduleRetry).
+     */
+    adoptFallback() {
+        this.current = this.fallback;
+        this.fallbackUnsubscribe ??= this.fallback.subscribe(() => this.publish());
+        this.unsubscribeCurrent = this.fallbackUnsubscribe;
+        this.publish();
+    }
+    /** Retry the binder lookup a few times across the aggregate's async mount. */
+    scheduleRetry() {
+        if (this.disposed)
+            return;
+        if (this.attempts >= BINDER_ATTEMPTS) {
+            this.adoptFallback();
+            return;
+        }
+        this.attempts += 1;
+        this.retryTimer = window.setTimeout(() => {
+            this.retryTimer = undefined;
+            if (this.disposed)
+                return;
+            if (this.resolve())
+                return;
+            // The binder still absent: keep waiting only while the shared form cannot
+            // answer for itself, otherwise a standalone install stalls for the window.
+            if (this.fallbackSettled()) {
+                this.attempts = BINDER_ATTEMPTS;
+                this.adoptFallback();
+                return;
+            }
+            this.scheduleRetry();
+        }, BINDER_RETRY_MS);
+    }
+    publish() {
+        for (const listener of this.listeners)
+            listener();
+    }
+    /** The resolved form, or a placeholder snapshot when still pending. */
+    snapshot() {
+        return this.current?.getSnapshot() ?? pendingSnapshot(this.attempts >= BINDER_ATTEMPTS ? 'unavailable' : 'loading');
+    }
+    getSnapshot() {
+        return this.snapshot();
+    }
+    subscribe(listener) {
+        this.listeners.add(listener);
+        return () => { this.listeners.delete(listener); };
+    }
+    mutate(ops, expectedRevision) {
+        return this.current?.mutate(ops, expectedRevision) ?? Promise.resolve(false);
+    }
+    set(field, value) {
+        return this.current?.set(field, value) ?? Promise.resolve(false);
+    }
+    unset(field) {
+        return this.current?.unset(field) ?? Promise.resolve(false);
+    }
+    /** Release the retry timer and mirror subscription; not part of ConfigForm. */
+    dispose() {
+        if (this.disposed)
+            return;
+        this.disposed = true;
+        if (this.retryTimer !== undefined) {
+            window.clearTimeout(this.retryTimer);
+            this.retryTimer = undefined;
+        }
+        this.unsubscribeCurrent?.();
+        this.unsubscribeCurrent = undefined;
+        this.current = undefined;
+        this.listeners.clear();
+        // The shared per-entry form carries no disposer of its own (ConfigForm is a
+        // pure read/write surface); only this form's own subscriptions are released.
+        this.fallbackUnsubscribe?.();
+        this.fallbackUnsubscribe = undefined;
+    }
+}
+/**
+ * Client plugin body: register dictionaries, mount the global pet entry and
+ * poll loop while the plugin is enabled, and seat the settings card as a
+ * first-level settings section.
+ * @param ctx - client root context.
+ */
+/** The page-wide work-tick gate; its window follows the active pet's cadence. */
+const workTickGate = createWorkTickGate();
+/**
+ * The work cadence the active pet declares, when its registry entry is known.
+ * @param store - the pet store holding the host snapshot and the registry list.
+ * @returns the configured `gameplay.work.tickMs`, or undefined when unknown.
+ */
+function activeWorkTickMs(store) {
+    const state = store.getSnapshot();
+    const definition = state.pets.find((entry) => entry.id === state.snapshot?.pet.id);
+    return definition?.gameplay?.work?.tickMs;
+}
+export function apply(ctx) {
+    // Anonymous install heartbeat (docs/telemetry.md): one beat per browser per
+    // UTC day, package name only, silent failure.
+    reportDailyHeartbeat([{ name: '@linxin666/dsh-pet' }]);
+    ctx.effect(() => {
+        try {
+            return ctx.locale.register(NS, { zh, en });
+        }
+        catch {
+            return () => { };
+        }
+    }, 'pet: dictionaries');
+    // Built-in renderers dispatch through the plugin-wide registry (pet-center
+    // M3). Registration is idempotent (id wins), so re-applies stay clean.
+    defaultPetRendererRegistry.register(live2dRenderer);
+    defaultPetRendererRegistry.register(frames2dRenderer);
+    const settingsForm = new DeferredSettingsForm(ctx);
+    const enabled = () => {
+        const snapshot = settingsForm.getSnapshot();
+        return snapshot.status === 'ready'
+            ? snapshot.value?.enabled ?? true
+            : snapshot.status === 'unavailable';
+    };
+    // First-level settings section: one staged form over the 'pet' profile
+    // entry's configuration, registered as a top-level settings page. The
+    // controller loads the petId choices from the registry endpoint itself — the
+    // registry lists the available pets (built-in assets plus user dirs), so the
+    // section only ever shows installed pets. Installing new pets happens in the
+    // Workshop store.
+    const petSettings = new PetSettingsCardController(settingsForm);
+    // The section entry owns the controller: unregistering it (fiber disposal,
+    // hot reload) releases the form subscription through petSettings.dispose.
+    ctx.slots.inject('settings.section', () => {
+        try {
+            const unregister = ctx.slots.register({
+                name: 'settings.section',
+                id: 'pet',
+                order: 130,
+                label: () => ctx.locale.bind('pet')('settings.title'),
+                locale: 'pet',
+                inject: () => petSettings.inject(),
+            }, PetSettingsSection);
+            return () => {
+                unregister();
+                petSettings.dispose();
+            };
+        }
+        catch {
+            return () => { };
+        }
+    });
+    // The global pet entry, its store, and the poll loop live while the plugin
+    // is enabled; toggling the setting off hides the pet and stops polling.
+    // 'uiDead' marks a terminal teardown (takeover by a later bundle instance
+    // or fiber disposal): a taken-over or disposed instance must never remount
+    // from a late settings callback (issue #785).
+    let disposeUi;
+    let clearUiTeardown;
+    let uiDead = false;
+    const killUi = () => {
+        if (uiDead)
+            return;
+        uiDead = true;
+        clearUiTeardown?.();
+        clearUiTeardown = undefined;
+        disposeUi?.();
+        disposeUi = undefined;
+    };
+    const syncUi = () => {
+        if (!uiDead && enabled() && disposeUi === undefined) {
+            // ONE store instance for the whole app, owned by this apply body. The
+            // pet is host-global (state/display/interactions are /api/pet/*
+            // endpoints with no session dimension), so the slot system's per-session
+            // store scoping would only reset the pet on session switches and leave
+            // it stateless on the new-conversation screen (no session to scope by).
+            const petStore = createPetStore().create();
+            const setSnapshot = petStore.actions.setSnapshot;
+            const setPets = petStore.actions.setPets;
+            const setState = petStore.actions.setState;
+            const setFeedback = petStore.actions.setFeedback;
+            // Clicking a session bubble jumps the GUI to that session; the
+            // catalog's main-view ownership marker tells which session the main view
+            // holds (the multi-instance replacement for the removed list.current), so
+            // the host can lead the bubble stack with it. A bubble can outlive its
+            // disposed session by one poll tick, and navigation rejects unknown ids,
+            // so consult the live list first. The pet's type program also loads the
+            // host-side dsh-session package through the service types, whose Context
+            // merge declares a different 'sessions' face; pin the browser runtime's
+            // outward face here.
+            const sessions = ctx.sessions;
+            const currentSessionId = () => mainViewSessionId(sessions.list.getSnapshot().byId);
+            // The registry list is fetched lazily with retries baked into the poll
+            // cycle: until it lands, the dock entry renders nothing and every 2s
+            // tick tries again. After it lands, one list feeds both the sprite and
+            // the settings card's choices.
+            let petsLoaded = false;
+            // Latest-wins guard: the 2s tick, visibility recovery, and
+            // interaction-triggered refreshes can overlap; only the newest
+            // response may publish, so a slow older one can never roll the
+            // snapshot back.
+            let stateSeq = 0;
+            const pollNow = () => {
+                if (!petsLoaded) {
+                    petApi.pets().then((list) => {
+                        petsLoaded = true;
+                        setPets(list);
+                    }, () => {
+                        // Retry on the next poll tick.
+                    });
+                }
+                const seq = stateSeq + 1;
+                stateSeq = seq;
+                petApi.state(currentSessionId()).then((snapshot) => {
+                    if (seq !== stateSeq)
+                        return;
+                    setSnapshot(snapshot);
+                }, () => {
+                    if (seq !== stateSeq)
+                        return;
+                    setState('error', 'pet.state transport error');
+                });
+            };
+            const disposePoll = ctx.effect(() => {
+                // Poll only while the tab is visible: the host snapshot does not
+                // change while the page is hidden, so a background interval would
+                // only burn RPCs (browser throttling is an unreliable backstop).
+                // Coming back to the tab refreshes the pet immediately instead of
+                // waiting out the next 2 s cycle.
+                let timer;
+                const stop = () => {
+                    if (timer !== undefined) {
+                        window.clearInterval(timer);
+                        timer = undefined;
+                    }
+                };
+                const start = () => {
+                    if (timer === undefined && document.visibilityState === 'visible') {
+                        timer = window.setInterval(pollNow, POLL_MS);
+                    }
+                };
+                const onVisibility = () => {
+                    if (document.visibilityState === 'visible') {
+                        pollNow();
+                        start();
+                    }
+                    else {
+                        stop();
+                    }
+                };
+                start();
+                document.addEventListener('visibilitychange', onVisibility);
+                return () => {
+                    stop();
+                    document.removeEventListener('visibilitychange', onVisibility);
+                };
+            }, 'pet: poll');
+            // A current-session switch should re-order the bubble stack right away,
+            // not on the next 2s tick. Poll only while the tab is visible, as the
+            // poll loop itself does.
+            const disposeSessionWatch = ctx.effect(() => {
+                const unsubscribe = sessions.list.subscribe(() => {
+                    if (document.visibilityState === 'visible')
+                        pollNow();
+                });
+                return unsubscribe;
+            }, 'pet: current-session watch');
+            const openSession = (sessionId) => {
+                const list = sessions.list.getSnapshot();
+                if (list.byId[sessionId] === undefined)
+                    return;
+                // Navigation belongs to the workspace UI since the multi-instance Client
+                // Session model; the Session Controller no longer opens one.
+                ctx.uiWorkspace.openSession(sessionId);
+            };
+            const injected = () => ({
+                store: petStore,
+                ensure: pollNow,
+                openSession,
+                pet: () => {
+                    petApi.interact('pet').then((result) => {
+                        setFeedback({
+                            text: result.reaction,
+                            kind: 'pet',
+                            at: Date.now(),
+                        });
+                    }, () => {
+                        // Ignore transport errors on interactions; the next poll resyncs.
+                    });
+                },
+                feed: () => {
+                    petApi.interact('feed').then((result) => {
+                        setFeedback({
+                            text: result.reaction,
+                            kind: 'feed',
+                            at: Date.now(),
+                        });
+                    }, () => {
+                        // Ignore transport errors on interactions; the next poll resyncs.
+                    });
+                },
+                hide: () => {
+                    petApi.setVisible(false).then(() => {
+                        pollNow();
+                    }, () => {
+                        // Ignore; next poll resyncs.
+                    });
+                },
+                summon: () => {
+                    petApi.setVisible(true).then(() => {
+                        pollNow();
+                    }, () => {
+                        // Ignore; next poll resyncs.
+                    });
+                },
+                dragEnd: (right, bottom) => {
+                    petApi.setConfig({ right, bottom }).then(() => {
+                        pollNow();
+                    }, () => {
+                        // Ignore; next poll resyncs.
+                    });
+                },
+                rename: (name) => {
+                    petApi.setName(name).then((result) => {
+                        if (result.ok)
+                            pollNow();
+                    }, () => {
+                        // Ignore; next poll resyncs.
+                    });
+                },
+                // A panel action click (issue #6) travels back to the host, which
+                // dispatches it to the plugin that registered the action. The plugin's
+                // own callback does the work; the browser half only reports the id, and
+                // the next poll brings back whatever that callback changed. A click on
+                // an action the plugin already disposed answers { ok: false } — the
+                // button was one poll tick stale, which is not a pet failure.
+                panelAction: (id) => {
+                    petApi.panelAction(id).then((result) => {
+                        if (result.ok)
+                            pollNow();
+                    }, () => {
+                        // Ignore; next poll resyncs.
+                    });
+                },
+                feedbackDone: () => {
+                    setFeedback(null);
+                },
+                gameplay: {
+                    touch: (zone) => petApi.gameplayTouch(zone),
+                    setSkin: (skin) => petApi.setSkin(skin).then((result) => {
+                        if (result.ok)
+                            pollNow();
+                        return result;
+                    }, () => ({ ok: false, error: 'transport' })),
+                    setMode: async (mode) => {
+                        if (mode === 'work')
+                            workTickGate.reset();
+                        return petApi.gameplaySetMode(mode);
+                    },
+                    workTick: async () => {
+                        // One adjudication per tick window, page-wide: suppress stale
+                        // duplicate intervals (HMR) re-playing the result track. The window
+                        // is the pet's own cadence, so a shorter tickMs is not downgraded.
+                        if (!workTickGate.allow(activeWorkTickMs(petStore))) {
+                            return { ok: true };
+                        }
+                        return petApi.gameplayWorkTick();
+                    },
+                    buy: (item) => petApi.gameplayBuy(item),
+                },
+            });
+            // The pet is host-global (its state/display/interactions have no session
+            // dimension), and the official rc.6 shell declares no root-scoped slot
+            // for a global floating surface — the dock is session-scoped, so a pet
+            // mounted there would vanish on the new-conversation screen (issue #48).
+            // The entry therefore mounts straight onto document.body via a single
+            // React root for the page lifetime: PetSprite portals itself to body
+            // when visible, and the hidden-state summon button is fixed-positioned.
+            //
+            // Cross-instance single-mount guard (issue #785): take over the
+            // page-global slot first — the previous bundle instance's fiber may
+            // still be draining during a client reload, so unmount its React root
+            // and remove its container — then sweep containers left behind by
+            // instances that predate the teardown registry, so this mount is the
+            // page's only [data-dsh-pet-root].
+            takeoverPetUiTeardown();
+            for (const stale of Array.from(document.querySelectorAll('div[data-dsh-pet-root]'))) {
+                stale.remove();
+            }
+            const container = document.createElement('div');
+            container.dataset.dshPetRoot = '';
+            container.dataset.dshPlugin = 'pet';
+            document.body.appendChild(container);
+            const petRoot = createRoot(container);
+            // The sprite chrome portals into THIS root (not document.body): the
+            // root then owns the whole surface, so a root-keyed suppressor (the
+            // portrait mobile layer, which hides [data-dsh-plugin="pet"]) really
+            // hides the sprite instead of missing the portaled float.
+            //
+            // The floating surface has no session-scoped locale seat, so it must be
+            // handed the framework one explicitly. Resolving its copy from the
+            // plugin's own zh/en dictionary keyed on <html lang> sent every
+            // registered language except English to Chinese: a ru/ja/de page showed a
+            // Chinese panel while the settings card beside it was translated. Binding
+            // the 'pet' namespace instead follows the active language, the English
+            // fallback, and every language pack that registers a dictionary for it
+            // (the settings section label already resolves through the same seat).
+            petRoot.render(createElement(PetDockEntry, { ...injected(), t: ctx.locale.bind(NS), portalTarget: container }));
+            let uiGone = false;
+            disposeUi = () => {
+                if (uiGone)
+                    return;
+                uiGone = true;
+                clearUiTeardown?.();
+                clearUiTeardown = undefined;
+                petRoot.unmount();
+                container.remove();
+                disposePoll();
+                disposeSessionWatch();
+                disposeUi = undefined;
+            };
+            // The slot teardown is the takeover hook a later apply body runs; it
+            // marks this instance terminal so a late settings callback from the
+            // still-draining instance cannot remount a second pet.
+            clearUiTeardown = registerPetUiTeardown(() => {
+                uiDead = true;
+                disposeUi?.();
+            });
+        }
+        else if (!uiDead && !enabled() && disposeUi !== undefined) {
+            disposeUi();
+            disposeUi = undefined;
+        }
+    };
+    // The settings subscription and the pet UI lifetime follow the fiber
+    // (issue #785): disposal drops the subscription and tears the UI down
+    // (terminal), so a hot-reloaded or re-injected bundle never leaves the
+    // previous React root, container, or poll loop behind on document.body.
+    const unsubscribeSettings = settingsForm.subscribe(syncUi);
+    ctx.effect(() => () => {
+        unsubscribeSettings();
+        // Release the deferred form's retry timer and its mirror subscription so a
+        // disposed fiber can never bind or publish after teardown.
+        settingsForm.dispose();
+        killUi();
+    }, 'pet: client lifecycle');
+    syncUi();
+}

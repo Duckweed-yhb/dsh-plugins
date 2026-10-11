@@ -1,0 +1,8 @@
+# preflight：只插入一行 Host 插件，注册 plugin_preflight 工具。
+#
+# 它没有浏览器半区（dsh.client），所以不会往你的渲染进程里加任何代码——
+# 一个“防崩溃”的插件不应该自己增加崩溃面。
+
+- insert:
+    - id: yhb-preflight
+      name: '@yhb/dsh-plugin-preflight'

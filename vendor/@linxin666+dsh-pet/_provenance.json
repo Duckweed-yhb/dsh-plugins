@@ -1,0 +1,50 @@
+{
+  "name": "@linxin666/dsh-pet",
+  "version": "0.4.6",
+  "spec": "@linxin666/dsh-pet",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/@linxin666/dsh-pet/-/dsh-pet-0.4.6.tgz",
+  "integrity": "sha512-BDoqAFFfyTwXJS9AXvw6CS1QM4lsJZB8F5aHvV6kYYIeNwzIYADyFLGdLq7bqEG54WcKO0eRd6jI/3UyPN2eaQ==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T12:39:40.658Z",
+  "dir": "@linxin666+dsh-pet",
+  "license": "Apache-2.0",
+  "description": "Multi-pet companion plugin for the dsh web GUI: a registry-driven floating pet that reacts to model activity, with per-pet naming, petting/feeding interactions and an affinity score",
+  "repository": "git+https://github.com/zhu1090093659/dsh-pet.git",
+  "homepage": "https://github.com/zhu1090093659/dsh-pet#readme",
+  "fileCount": 318,
+  "unpackedSize": 16225473,
+  "nodeEngines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-conversation",
+        "@deepseek-ai/dsh-api-session-controller",
+        "@deepseek-ai/dsh-client-ui-workspace"
+      ],
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.1.7-rc.1"
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "react-dom": "^18.2.0",
+    "@deepseek-ai/dsh": ">=0.1.7-rc.1"
+  },
+  "dependencies": {
+    "clsx": "^2.1.1",
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "maintainers": [
+    "linxin666"
+  ]
+}

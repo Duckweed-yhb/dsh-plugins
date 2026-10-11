@@ -1,0 +1,42 @@
+{
+  "name": "dshmarket",
+  "version": "1.66.15",
+  "spec": "dshmarket",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/dshmarket/-/dshmarket-1.66.15.tgz",
+  "integrity": "sha512-GbMx1F4YopA4ap9sXtIz2gHKbJVDfMFsEakZKtrRr4yZKDTkyWkHZ7xli8MXdNZc6/bzfQ1TSIw4Mljzt8PwHQ==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T12:38:20.662Z",
+  "dir": "dshmarket",
+  "license": "MIT",
+  "description": "Visual plugin market inside DeepSeek Harness — browse, search, and one-click install community plugins. · DSH 可视化插件市场：逛一逛，点一下，装好。",
+  "repository": "git+https://github.com/dsh-market/dsh-market.git",
+  "homepage": "https://dshmarket.com",
+  "fileCount": 177,
+  "unpackedSize": 4431587,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "@deepseek-ai/schemastery": "^3.18.1",
+    "@deepseek-ai/dsh-settings": "^0.1.0-rc.7 || ^0.1.1-rc.2 || ^0.1.2-alpha.2 || ^0.2.0-rc.1"
+  },
+  "dependencies": {
+    "undici": "^7.29.1",
+    "js-yaml": "^4.3.2"
+  },
+  "maintainers": [
+    "fkysly"
+  ]
+}

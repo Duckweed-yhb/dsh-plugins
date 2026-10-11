@@ -1,0 +1,6 @@
+{
+  "meta": {
+    "title": "Plugin preflight",
+    "description": "Statically reviews a plugin before DSH loads it, looking for patterns that break startup or crash the app."
+  }
+}

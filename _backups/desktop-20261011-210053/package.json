@@ -1,0 +1,18 @@
+{
+  "name": "dsh-profile-desktop",
+  "private": true,
+  "dependencies": {
+    "@yhb/dsh-plugin-hello": "link:E:/future/yhb/05-学习资源/dsh-plugins/plugins/hello",
+    "@yhb/dsh-plugin-preflight": "link:E:/future/yhb/05-学习资源/dsh-plugins/plugins/preflight"
+  },
+  "dsh": {
+    "profile": {
+      "bundles": [
+        "@deepseek-ai/dsh-base",
+        "@deepseek-ai/dsh-web-app",
+        "@yhb/dsh-plugin-hello",
+        "@yhb/dsh-plugin-preflight"
+      ]
+    }
+  }
+}

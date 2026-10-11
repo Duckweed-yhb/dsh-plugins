@@ -1,0 +1,42 @@
+{
+  "name": "@linxin666/dsh-client-ui-market",
+  "version": "0.4.6",
+  "spec": "@linxin666/dsh-client-ui-market",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/@linxin666/dsh-client-ui-market/-/dsh-client-ui-market-0.4.6.tgz",
+  "integrity": "sha512-Acg6Awmr5ccbmONRjh1VQjFSZ42/HQUnhCiBZIXAoTe1a05r0WSuPqUloas0MM8f35/tZvBPzW21lcfDLwq6Bw==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T12:38:18.251Z",
+  "dir": "@linxin666+dsh-client-ui-market",
+  "license": "BSD-3-Clause",
+  "description": "Workshop browser card: browse skins, pets and community plugins from dsh-market.com and install them in the GUI (assets into the DSH home directories, plugins through the optional plugin manager).",
+  "repository": "https://github.com/zhu1090093659/dsh-web.git",
+  "fileCount": 10,
+  "unpackedSize": 407262,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings"
+      ],
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2"
+  },
+  "dependencies": {
+    "schemastery": "^3.18.0"
+  },
+  "maintainers": [
+    "linxin666"
+  ]
+}

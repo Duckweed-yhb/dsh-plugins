@@ -1,0 +1,46 @@
+{
+  "name": "@linxin666/dsh-client-ui-skin-center",
+  "version": "0.4.6",
+  "spec": "@linxin666/dsh-client-ui-skin-center",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/@linxin666/dsh-client-ui-skin-center/-/dsh-client-ui-skin-center-0.4.6.tgz",
+  "integrity": "sha512-eagDJqBrpvjPSff8hVOGchgQBArF8wcWrHrqUwfD5sfd2qCjnnAS9UDJNcC31UY746DhIyAr5Xw3fSPUvMX9zQ==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T12:38:15.923Z",
+  "dir": "@linxin666+dsh-client-ui-skin-center",
+  "license": "Apache-2.0",
+  "description": "In-GUI skin center for the dsh web GUI — the single skin package: skins are pure asset directories (built-in plus $DSH_HOME/skins) loaded and rendered only by the skin center; live try-on and one-click apply switch atomically in the page (no reload, no co",
+  "repository": "git+https://github.com/zhu1090093659/dsh-skins.git",
+  "homepage": "https://github.com/zhu1090093659/dsh-skins#readme",
+  "fileCount": 25,
+  "unpackedSize": 1587673,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-theme"
+      ],
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.1.7-rc.1"
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh": ">=0.1.7-rc.1"
+  },
+  "dependencies": {
+    "lightningcss": "^1.32.0",
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "maintainers": [
+    "linxin666"
+  ]
+}

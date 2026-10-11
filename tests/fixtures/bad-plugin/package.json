@@ -1,0 +1,20 @@
+{
+  "name": "@yhb/fixture-bad-plugin",
+  "version": "1.0.0",
+  "private": true,
+  "description": "仅供预检规则测试使用：这个包故意集齐了会导致 DSH 崩溃的写法，不要安装它。",
+  "type": "module",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true
+    }
+  }
+}

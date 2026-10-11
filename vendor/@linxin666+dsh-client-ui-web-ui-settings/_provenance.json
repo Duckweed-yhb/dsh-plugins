@@ -1,0 +1,45 @@
+{
+  "name": "@linxin666/dsh-client-ui-web-ui-settings",
+  "version": "0.4.6",
+  "spec": "@linxin666/dsh-client-ui-web-ui-settings",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/@linxin666/dsh-client-ui-web-ui-settings/-/dsh-client-ui-web-ui-settings-0.4.6.tgz",
+  "integrity": "sha512-pLQ6li1J/4OCIDpqRWzKT1oHPy9ZbNVeowOjPFx8LhkOEM2ktWbLKvM3nLetBVXSsLa0aobVW9CXqxZy9oqEWw==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T12:38:17.318Z",
+  "dir": "@linxin666+dsh-client-ui-web-ui-settings",
+  "license": "Apache-2.0",
+  "description": "Web UI plugin group for the dsh settings page: one first-level settings section that hosts the dsh-web family plugins' enable switches and configuration forms.",
+  "repository": "https://github.com/zhu1090093659/dsh-web.git",
+  "fileCount": 10,
+  "unpackedSize": 151334,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-store",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-api-remotes"
+      ],
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2"
+  },
+  "dependencies": {
+    "yaml": "^2.9.0",
+    "schemastery": "^3.18.0"
+  },
+  "maintainers": [
+    "linxin666"
+  ]
+}

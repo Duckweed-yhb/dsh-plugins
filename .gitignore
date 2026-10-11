@@ -1,0 +1,16 @@
+# 依赖与构建产物
+node_modules/
+dist/
+*.tsbuildinfo
+pnpm-lock.yaml
+
+# 本地实验与临时文件
+.tmp/
+*.local.yml
+*.bak-*
+
+# 注意：**不要**把 vendor/ 写进 .gitignore。
+# ripgrep（grep/glob 工具背后的引擎）会遵守 .gitignore，一旦忽略 vendor/，
+# 对归档代码的所有检索都会静默返回空——审阅就废了。
+# vendor/ 是"不提交"而不是"不可见"：提交前用 git add 明确挑选，
+# 或临时写 .git/info/exclude。理由见 vendor/README.md。

@@ -1,0 +1,8 @@
+# hello 这个 bundle 往当前 profile 的组合里插入一行插件。
+#
+# 行的 id 是 profile patch 用来定位它的键（插件页的开关就是把 disabled 写到这个 id 上）。
+# 这个名字要唯一：和官方行重名会覆盖官方那一行。
+
+- insert:
+    - id: yhb-hello
+      name: '@yhb/dsh-plugin-hello'

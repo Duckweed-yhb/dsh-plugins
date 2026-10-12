@@ -1,0 +1,30 @@
+{
+  "name": "dsh-bloom-theme",
+  "version": "0.17.3",
+  "spec": "dsh-bloom-theme",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/dsh-bloom-theme/-/dsh-bloom-theme-0.17.3.tgz",
+  "integrity": "sha512-XpTSc1mty7OypUU8QpHL93/g9OKhfZ9n4iYtYbuZreL5BZM6eNTDe3U20nJGrr90mbspL/faoriRyPdLCIOVKw==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T13:30:38.537Z",
+  "dir": "dsh-bloom-theme",
+  "license": "MIT",
+  "description": "Bloom for DSH — 玻璃+莫兰迪主题。10 套 OKLCH 配色（黛蓝/朱砂/桃夭/天青/竹青/赭石/青金/琥珀/落霞/青莲），明暗自适应；磨砂玻璃面板默认常开；微动效 + 版本/更新指示。零依赖、TypeScript、WCAG AA。",
+  "repository": "git+https://github.com/webkubor/dsh-bloom-theme.git",
+  "homepage": "https://github.com/webkubor/dsh-bloom-theme#readme",
+  "fileCount": 24,
+  "unpackedSize": 488267,
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "maintainers": [
+    "webkubor"
+  ]
+}

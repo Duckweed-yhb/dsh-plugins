@@ -1,0 +1,52 @@
+{
+  "name": "dsh-cost-meter",
+  "version": "1.8.20",
+  "spec": "dsh-cost-meter",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/dsh-cost-meter/-/dsh-cost-meter-1.8.20.tgz",
+  "integrity": "sha512-UYeWl1RvRI3HqgLaBI/d1Pk66527Dv6CWgxZ5C5sVylu25jre3dc6d85tdyiusq8M9Vz8nOI2F9w0XbLPAzrAA==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T13:35:14.972Z",
+  "dir": "dsh-cost-meter",
+  "license": "MIT",
+  "description": "DeepSeek Harness 会话费用统计插件:本会话成本、当日费用、历史记录与官方价格同步,支持多厂商多模型价格计费(内置 170+ 模型 ID 价格目录与自动匹配)、主流 Coding Plan 订阅额度查询与显示(11 家,含小米 MiMo Token Plan 控制台 Cookie 查询、SCNet Token Plan 本地 Credits 计量与火山方舟 Volcano Ark Coding Plan AK/SK 签名查询)、自定义 Provider 余额查询(可配任意 HTTP 端点)与",
+  "repository": "git+https://github.com/Han-1413141/dsh-cost-meter.git",
+  "homepage": "https://github.com/Han-1413141/dsh-cost-meter#readme",
+  "fileCount": 65,
+  "unpackedSize": 1975253,
+  "nodeEngines": {
+    "node": ">=20"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web"
+    },
+    "compatibility": {
+      "dsh": ">=0.1.0-rc.5",
+      "dshReleases": {
+        "0.1.2-rc.1": "compatible",
+        "0.2.0-rc.1": "compatible",
+        "0.2.0-rc.2": "compatible",
+        "0.1.2-alpha.3": "compatible",
+        "0.1.2-alpha.4": "compatible",
+        "0.1.2-alpha.5": "compatible",
+        "0.1.3-alpha.1": "unknown",
+        "0.1.3-alpha.2": "compatible",
+        "0.1.5-alpha.1": "compatible"
+      }
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/dsh-home-paths": "^0.1.0-rc.6 || ^0.1.1-0 || ^0.1.2-0 || ^0.1.3-0 || ^0.1.5-0 || >=0.2.0-rc.1 <0.3.0-0",
+    "@deepseek-ai/dsh-credentials": "^0.1.0-rc.6 || ^0.1.1-0 || ^0.1.2-0 || ^0.1.3-0 || ^0.1.5-0 || >=0.2.0-rc.1 <0.3.0-0"
+  },
+  "dependencies": {
+    "zod": "4.6.5"
+  },
+  "maintainers": [
+    "smallsun"
+  ]
+}

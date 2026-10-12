@@ -1,0 +1,95 @@
+{
+  "name": "dsh-bloom-theme",
+  "version": "0.17.3",
+  "description": "Bloom for DSH — 玻璃+莫兰迪主题。10 套 OKLCH 配色（黛蓝/朱砂/桃夭/天青/竹青/赭石/青金/琥珀/落霞/青莲），明暗自适应；磨砂玻璃面板默认常开；微动效 + 版本/更新指示。零依赖、TypeScript、WCAG AA。",
+  "type": "module",
+  "main": "lib/index.js",
+  "types": "./lib/index.d.ts",
+  "exports": {
+    ".": {
+      "types": "./lib/index.d.ts",
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./package.json": "./package.json"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [],
+      "platform": "web",
+      "immediately": true
+    }
+  },
+  "scripts": {
+    "build": "npm run typecheck && tsc -p tsconfig.json && node scripts/bundle.mjs",
+    "build:watch": "node scripts/bundle.mjs --watch",
+    "sync-version": "node scripts/sync-version.mjs",
+    "deploy": "node scripts/sync-version.mjs && npm run build && rsync -av --delete lib/ ~/.dsh/profiles/${DSH_PROFILE:-desktop}/node_modules/dsh-bloom-theme/lib/ && rsync -av package.json ~/.dsh/profiles/${DSH_PROFILE:-desktop}/node_modules/dsh-bloom-theme/",
+    "dev": "node scripts/sync-version.mjs && npm run build && (npm run build:watch &) && node scripts/watch-deploy.js",
+    "preview": "npm run deploy && echo '部署完成 —— 到桌面端应用里重载页面（它不是浏览器，没有可 open 的 URL）'",
+    "package": "npm run build && npm pack",
+    "desktop:link": "node scripts/desktop-profile.mjs link",
+    "desktop:production": "node scripts/desktop-profile.mjs production",
+    "check": "node scripts/check.mjs && node scripts/dsh-drift.mjs && node scripts/check-drag.mjs && contrast-guard && node --test scripts/version.test.mjs && node --test scripts/persistence.test.mjs && node --test test/stale-package-name.test.mjs",
+    "check:contrast": "contrast-guard",
+    "prepublishOnly": "node scripts/sync-version.mjs && npm run build && npm run check && node scripts/prepublish-gate.mjs && node scripts/readme-gate.mjs",
+    "typecheck": "tsc --noEmit -p tsconfig.check.json",
+    "test:version": "node --test scripts/version.test.mjs",
+    "preflight": "node scripts/preflight.mjs",
+    "stats": "node scripts/stats-table.mjs",
+    "test": "npm run check",
+    "check:drift": "node scripts/dsh-drift.mjs"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/webkubor/dsh-bloom-theme.git"
+  },
+  "bugs": {
+    "url": "https://github.com/webkubor/dsh-bloom-theme/issues"
+  },
+  "homepage": "https://github.com/webkubor/dsh-bloom-theme#readme",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "dsh-theme",
+    "deepseek-harness",
+    "deepseek",
+    "harness",
+    "theme",
+    "skin",
+    "dark-theme",
+    "ui-theme",
+    "web-ui",
+    "bloom",
+    "morandi",
+    "oklch",
+    "accessibility",
+    "wcag",
+    "wallpaper",
+    "glassmorphism"
+  ],
+  "license": "MIT",
+  "files": [
+    "cordis.patch.yml",
+    "lib",
+    "src",
+    "tsconfig.json",
+    "README.md",
+    "DEV_NOTES.md",
+    "LICENSE"
+  ],
+  "publishConfig": {
+    "access": "public"
+  },
+  "devDependencies": {
+    "@types/node": "^26.2.0",
+    "contrast-guard": "^0.2.0",
+    "esbuild": "^0.28.2",
+    "typescript": "^7.0.2"
+  }
+}

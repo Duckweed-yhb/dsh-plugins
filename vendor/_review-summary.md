@@ -45,8 +45,35 @@
 6. **`dsh-plugin-gate` 可以装**（低风险），但只当"补充扫描"，别当安装闸门。
 7. 出事恢复顺序：侧栏插件页关掉那一行 → profile 的 `cordis.patch.yml` 写 `disabled: true` → `dsh plugin remove <name>` → 从备份还原 → 轮换宿主可见的密钥。
 
-## 五、仍未覆盖（诚实边界）
+## 五、实测记录（2026-10-11，安装 `dsh-plugin-gate`）
 
+选择标准：**让 DSH 崩溃概率最低**。依据是用户旧环境的真实崩溃形态——旧日志里 `RendererStartupFailure` 点名的三个插件是
+`@linxin666/dsh-client-ui-skin-center`、`@linxin666/dsh-pet`、`@linxin666/dsh-client-ui-web-ui-settings`
+→ **"带客户端半区"才是历史上真正崩过的路径**。`dsh-plugin-gate` 没有 `dsh.client`，不往页面写一个字节，那种崩溃在它身上不可能发生；最坏情况是 optional 行没挂上（警告），不是崩。
+
+时间线（每一步都有返回值佐证）：
+
+1. 直接安装 → **被拒**：`dsh: installation rejected: Plugin dsh-plugin-gate@1.3.2 is incompatible with dsh 0.2.0-rc.2: peerDependencies {"@deepseek-ai/dsh-fs":"^0.1.0-rc.6", …}` / `dsh: nothing was installed.`（profile 未被改动）
+2. `set_version_exemption(dsh-plugin-gate@1.3.2, 0.2.0-rc.2, acceptRisk)` → `application: applied`
+3. `install_bundle(dsh-plugin-gate)` → `application: applied`（pnpm 装 1 个包，971ms）
+4. `Config.listConfigs(name=dsh-plugin-gate)` → `include:gate` / `patchId: gate` / `status: schema`（Config 已投影）
+5. **调用 `gate_scan` 扫它自己** → 成功返回 **BLOCK（score 198，High 37）**，验证了 review 的静态预测，也**实测证明了豁免是对的**（代码在 0.2.0-rc.2 上确实能跑）
+6. 那 37 条 high **全部来自我的审计文件与它自己的 README**（`_review.md` 里我引用它的规则、`README.md:12` 描述规则、`LICENSE:3` 的版权年份），**没有一条来自它的代码** → 见 `README.md` 纪律 3：审计文件会污染别的扫描器，复核请扫已安装的那份。
+
+**兼容性结论（`tools/check-compat.mjs` 实测判定，含 npm 预发布元组规则）**
+
+| 包 | engines/peer 判定 | 结论 |
+|---|---|---|
+| `dsh-plugin-gate` | `^0.1.0-rc.6` vs 0.2.0-rc.2 → ❌ | 需豁免（已开） |
+| `@linxin666/dsh-pet` | `>=0.1.7-rc.1` vs 0.2.0-rc.2 → ❌ | **需豁免** |
+| `@linxin666/dsh-client-ui-skin-center` | 同上 → ❌ | **需豁免** |
+| `@linxin666/dsh-client-ui-market` | `>=0.2.0-rc.2` → ✅ | 可直接装 |
+| `@linxin666/dsh-client-ui-web-ui-settings` | `>=0.2.0-rc.2` → ✅ | 可直接装 |
+| `dshmarket` | cordis `^4.0.1`(→4.0.4)、schemastery、dsh-settings 全 ✅ | 可直接装 |
+
+> 注意：`>=0.1.7-rc.1` 之所以判 ❌，是 npm 的**预发布规则**——带预发布标签的版本只有在比较器与它同 `[major,minor,patch]` 元组时才成立。这条规则很容易被忽略，但它决定了 pet / skin-center 能不能装。
+
+## 六、仍未覆盖（诚实边界）
 - 六份 review 都是**只读静态审阅**，没有执行任何包内代码，也没有在真实 profile 上装过；"能装/不能装"的兼容性结论来自 `tools/check-compat.mjs` 的**存在性**比对（287 个运行时包名），不是实装验证。
 - 打包产物（`lib/client.js`、`lib/live2d-vendor.js`、`lib/routes.js` 等）体量大，均为抽样 + 模式检索，**未逐行通读**；`dshmarket` 还有约 30 条路由未逐行看。
 - 遥测的**服务端**行为（是否加盐哈希、是否存 IP）只能采信作者自述，无法独立验证。

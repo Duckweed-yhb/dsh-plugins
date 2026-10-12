@@ -48,8 +48,10 @@ node tools/check-compat.mjs <包目录>      # 只查一个
 - `vendor/<扁平包名>/_review.md` —— 人工代码 review 报告（子代理或我本人产出）
 - `vendor/_review-summary.md` —— 跨包汇总：总表、共性发现、装前边界、仍未覆盖的部分
 
-## ⚠️ 三条纪律
+## ⚠️ 四条纪律
 
 1. **这里是"待审"的第三方代码，不是可信副本。** 不要 `dsh plugin add ./vendor/...` 之前不审；也不要在本目录里 `node`/`npm install` 任何东西（那会执行第三方脚本，正是供应链风险）。看代码只用读和搜。
-2. **默认不进 git。** `vendor/` 在 `.gitignore` 里：它包含第三方代码（有各自许可证），往公开仓库镜像会带来再分发与许可证义务。想固化版本，改为提交 `index.json` + 各自的 `_provenance.json` 就够（哈希能证明字节）。确实要连代码一起提交时，先确认每个包的许可证允许再分发。
-3. **预检报告不等于 review 结论。** `high` 命中的是**能力**（跑子进程、写 profile、进程级钩子），对"插件管理器/安全门"这类工具属于职责所需；是否可接受要看 review 里这些能力**有没有被约束**。
+2. **不要把 `vendor/` 写进 `.gitignore`。** ripgrep（grep/glob 工具背后的引擎）会遵守 `.gitignore`，一旦忽略 `vendor/`，对归档代码的所有检索都会**静默返回空**——审查就废了。`vendor/` 是"不提交"而不是"不可见"；提交前用 `git add` 明确挑选（或临时写 `.git/info/exclude`）。
+3. **审计文件会污染别的扫描器。** `_provenance.json` / `_preflight.md` / `_review.md` 就放在包目录里，而"扫描全部文件"的工具（例如 `dsh-plugin-gate` 的 `gate_scan`）会把它们当成包内容——**实测：拿 `gate_scan` 扫 `vendor/dsh-plugin-gate` 得到 BLOCK（High 37），37 条全部来自我的审计文件与它自己的 README，没有一条来自它的代码**。
+   → 想用别的扫描器复核某个包，**扫已安装的那份**（`%DSH_HOME%\profiles\<profile>\node_modules\<包>`，那里没有审计文件），或者把命中里文件名以 `_` 开头的一律忽略。
+4. **预检报告不等于 review 结论。** `high` 命中的是**能力**（跑子进程、写 profile、进程级钩子），对"插件管理器/安全门"这类工具属于职责所需；是否可接受要看 review 里这些能力**有没有被约束**。

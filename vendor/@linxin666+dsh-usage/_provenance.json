@@ -1,0 +1,47 @@
+{
+  "name": "@linxin666/dsh-usage",
+  "version": "0.4.6",
+  "spec": "@linxin666/dsh-usage",
+  "registry": "https://registry.npmjs.org",
+  "tarball": "https://registry.npmjs.org/@linxin666/dsh-usage/-/dsh-usage-0.4.6.tgz",
+  "integrity": "sha512-PXkg2zbuphw88TWGRJFS2d/D6D9rmw+c9+aBP/d1fag3Bujpxwt4jTPvDiUWIIPZNN97wGYlkv4Qb4HuAvmpBQ==",
+  "integrityVerified": true,
+  "fetchedAt": "2026-10-11T13:35:40.484Z",
+  "dir": "@linxin666+dsh-usage",
+  "license": "Apache-2.0",
+  "description": "Usage statistics plugin for the dsh web GUI: per-provider balance and coding-plan quota detection plus a live token usage ledger, with a compact price glance card above the sidebar's Settings row",
+  "repository": "https://github.com/zhu1090093659/dsh-web.git",
+  "fileCount": 62,
+  "unpackedSize": 1930490,
+  "nodeEngines": {
+    "node": "^22.19.0 || >=24.0.0"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-client-connection",
+        "@deepseek-ai/dsh-client-locale",
+        "@deepseek-ai/dsh-client-ui-settings",
+        "@deepseek-ai/dsh-client-ui-slots",
+        "@deepseek-ai/dsh-client-ui-renderer"
+      ],
+      "platform": "web"
+    },
+    "engines": {
+      "dsh": ">=0.2.0-rc.2"
+    }
+  },
+  "peerDependencies": {
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh": ">=0.2.0-rc.2"
+  },
+  "dependencies": {
+    "@deepseek-ai/schemastery": "^3.18.4"
+  },
+  "maintainers": [
+    "linxin666"
+  ]
+}

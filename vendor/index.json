@@ -37,6 +37,33 @@
       "fetchedAt": "2026-10-11T12:39:40.658Z"
     },
     {
+      "name": "@linxin666/dsh-usage",
+      "version": "0.4.6",
+      "license": "Apache-2.0",
+      "fileCount": 62,
+      "dir": "@linxin666+dsh-usage",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T13:35:40.484Z"
+    },
+    {
+      "name": "dsh-bloom-theme",
+      "version": "0.17.3",
+      "license": "MIT",
+      "fileCount": 24,
+      "dir": "dsh-bloom-theme",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T13:30:38.537Z"
+    },
+    {
+      "name": "dsh-cost-meter",
+      "version": "1.8.20",
+      "license": "MIT",
+      "fileCount": 65,
+      "dir": "dsh-cost-meter",
+      "integrityVerified": true,
+      "fetchedAt": "2026-10-11T13:35:14.972Z"
+    },
+    {
       "name": "dsh-plugin-gate",
       "version": "1.3.2",
       "license": "MIT",

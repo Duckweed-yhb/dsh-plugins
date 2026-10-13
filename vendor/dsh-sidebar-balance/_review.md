@@ -74,10 +74,21 @@
   被削回 `["@deepseek-ai/dsh-base","@deepseek-ai/dsh-web-app"]`（5 个第三方 bundle 全掉）；
   `cordis.patch.yml` 丢掉 `agent-default-model`（默认模型配置）与 `agent-preset-registry`，
   `ui-settings` 被置 `enabled: false`。两者已从同目录 `cordis.patch.yml.bak-1791790015063` 手工还原。
-- **根因**：`package.json` 的 `dsh.client.inject: ["@deepseek-ai/dsh-client-runtime"]` 是外壳里**不存在**的 id
-  —— 外壳 `@deepseek-ai/dsh-web-frontend/dist/assets/index-5SrrfWpU.js`（633 KB）里 grep 不到
-  `dsh-client-runtime`，而 `dsh-client-store` / `dsh-client-ui-primitives` / `ui-slots` / `ui-dockkit` 都在。
-  不存在的 inject id ⇒ 条目永不激活 ⇒ 启动批次报 web boot 失败。宿主半区自注入的 boot 行用的是同一个 id，等价。
+- **根因（2026-10-13 改正，先前归因错了）**：不是 inject id 不存在，而是
+  **在启动批次里往一个还没被声明的槽位注册**。三条证据：
+  1. 外壳启动校验的状态文案里，`fiber === undefined` 才报 `import failed`，
+     `pending` 会报 `pending (waiting for service: …)`；我们拿到的是裸的 `failed`
+     ⇒ 模块加载成功，是 `apply()` 抛了异常。
+  2. 槽位核心注册实现：``if(!o?.spec) throw new Error(`slot "${e.name}" is not declared …`)``
+     —— 槽位要先由「父条目的 children 表」声明。
+  3. 全量扫 asar（8276 个文本文件）只有两处提到 `settings.trigger`，渲染/声明方是
+     `@deepseek-ai/dsh-client-ui-settings-general/lib/client.js`（`renderSlot("settings.trigger", { wide })`）。
+  本包的条目在启动批次里比这个模块先激活 → `settings.trigger` 还没声明 → `ctx.slots.register` 抛异常 →
+  fiber failed → web boot 整体失败。原版写的 `inject: ["@deepseek-ai/dsh-client-runtime"]` 本想解决排序，
+  但那个 id 在外壳里不存在（`index-5SrrfWpU.js` 633 KB 里 grep 不到），**未知 id 不会被等待 ⇒ 等于没排序**。
+- **修法（已落在 `plugins/sidebar-balance/` 的 fork 里）**：注册包 try/catch + 每 500ms 重试（最多 120 次），
+  槽位一出现就挂上；注册失败只降级成「挂件没挂上」，绝不冒泡成 fiber failed。`inject` 保持 `[]`
+  （不依赖别的模块激活时机，避免反过来把自己卡成 pending）。
 - **要救活就得改包**（fork 到 `plugins/`）：`dsh.client.inject` 改成 `[]`，并去掉宿主半区 `webServer.tapIndex`
   注入行里的 `inject` 字段。宿主半区本身干净（只 import `node:fs` / `node:crypto`），
   Go 额度链路实测可用（`/api/dsh-sidebar-balance/opencode` → 200，rolling/weekly/monthly 都有数）。

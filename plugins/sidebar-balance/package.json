@@ -1,0 +1,32 @@
+{
+  "name": "@yhb/dsh-plugin-sidebar-balance",
+  "version": "0.1.0",
+  "private": true,
+  "description": "侧栏余额挂件（fork 自 dsh-sidebar-balance 0.1.1）：在侧栏「设置」同一行右侧显示 DeepSeek 余额与 OpenCode Go 套餐消耗圆环。修掉原版 inject 写了外壳不存在的模块 id 导致 web boot 起不来的问题。",
+  "type": "module",
+  "icon": "./icon.svg",
+  "exports": {
+    ".": "./index.js",
+    "./client": "./client.js",
+    "./package.json": "./package.json",
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json"
+  },
+  "files": [
+    "index.js",
+    "client.js",
+    "cordis.patch.yml",
+    "icon.svg",
+    "locale/*.json"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "platform": "web",
+      "immediately": true,
+      "inject": []
+    }
+  }
+}

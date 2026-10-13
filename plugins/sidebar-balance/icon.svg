@@ -1,0 +1,5 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32" role="img" aria-label="sidebar balance">
+  <circle cx="16" cy="16" r="12.5" fill="none" stroke="currentColor" stroke-width="2.5" opacity="0.35"/>
+  <path d="M16 3.5a12.5 12.5 0 0 1 0 25" fill="none" stroke="currentColor" stroke-width="2.5"/>
+  <path d="M11 12.5h10M11 16h10M16 12.5V22" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round"/>
+</svg>

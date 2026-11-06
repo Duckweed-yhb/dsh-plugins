@@ -66,3 +66,22 @@ curl.exe -s http://127.0.0.1:19387/api/yhb-sidebar-balance/balance
 - 浏览器半区改走标准扫描后少了一层"自托管 + 注入 boot row"的兜底；
   万一哪天扫描不再覆盖 profile 内的第三方包，表现是**挂件不出现**（安全失败），不会崩启动。
 - Host 半区零外部依赖（只 import `node:*`），所以用 `link:` 外链安装也不会踩"import 宿主包失败"的坑。
+
+## 两处挂载点（2026-10-15 补）
+
+| 槽位 | 位置 | 形态 |
+|---|---|---|
+| `settings.trigger` | 侧栏最底部「设置」那一行（**接管**原厂内容，`priority: -1`） | 宽侧栏：齿轮 + 设置 + 右侧「彩点 + 金额 + Go 圆环」；**窄条（rail）：齿轮 + 右上角 5px 状态点** |
+| `conversation.composer.dock` | 输入框卡片**下方**那一条 | 一行只读文本：`● DeepSeek 账户 ¥0.93 ｜ Go 13%`；点击刷新，悬浮有完整 title |
+
+**为什么要两处**：侧栏是宽是窄**不由插件决定**。原版在 rail 下只画一个齿轮（作者注释 `amount would not fit`），
+结果是用户「看不见数字，也说不出哪里不对」。所以这里补了两手：窄条加状态点（不增加宽度）+ 另给一处与侧栏无关的挂载点。
+
+**注册方式的两套写法（都是踩坑换来的）**：
+
+- `settings.trigger`：`ctx.slots.register` + **try/catch + 每 500ms 重试** —— 启动批次里它可能早于「声明该槽位的模块」激活，
+  直接 throw 会变成 fiber failed（整页起不来，2026-10-12 / 10-13 各崩过一次）。
+- `conversation.composer.dock`：`ctx.slots.inject(槽位名, 回调)` —— **槽位一出现才回调注册**，天生不需要自己写重试
+  （这个写法抄自同仓库的 hello 插件，已验证）。外层仍留 try/catch 兜底：注册失败只能少一处显示，绝不允许冒泡。
+
+**冷/热启动的影响面**：客户端半区改动**刷新页面即可**（bundle 每次加载都重新取，外壳对 `/plugins/*` 显式设 `cache-control: no-store`）；宿主半区改动才需要重启 DSH。

@@ -103,3 +103,77 @@ node tests/run.mjs                               # 自测：反面样本应命�
 3. 颜色只用主题令牌 `--dsw-alias-*`（清单见 `docs/插件机制.md`），不要写死颜色。
 4. 不要在组件外写 DOM、不要碰 `document.body`、不要读别的插件的 DOM。所有注册都放进 `apply` 里并用 `ctx.effect` / `ctx.on` 返回清理函数。
 5. 一个组件抛异常会让**那一个槽位条目**崩掉（控制台 `slot entry crashed in '<slot>'`），不会整页崩——但 Host 半区在 required 条目上抛异常会让 DSH 起不来。
+
+## 🧭 升级兼容台账（DSH 升版后先跑这条命令）
+
+体检工具：`tools/check-peers.mjs`（比对每个已装插件的 peer/engines 要求与当前 harness 版本，
+只支持 `^` / `~` / `>=` / 精确，够覆盖本仓库）。用法：
+
+```powershell
+node tools/check-peers.mjs --harness 0.2.1-rc.2
+```
+
+**2026-10-20 · harness 0.2.0-rc.2 → 0.2.1-rc.2**
+
+| 插件 | 结果 |
+|---|---|
+| `@yhb/dsh-plugin-{hello,mode-panel,preflight,sidebar-balance}` | ✅ 匹配 |
+| `dsh-bloom-theme@0.17.3` | ✅ 匹配（且有 0.18.1 可升） |
+| `dsh-provider-usage@0.3.16` | ✅ 匹配（peer 是 `>=0.1.2-alpha.3`，向上兼容） |
+| `dsh-plugin-gate@1.3.2` | ⛔ **不匹配**：写死 `@deepseek-ai/dsh-fs/system-prompt/tools ^0.1.0-rc.6`，而新 harness 是 `0.2.1-rc.2`（`^0.1.0-rc.6` 的上界是 `<0.2.0`）。npm 上 4 个已发布版本全都是这个写法，**没有可用新版** → 已卸载 |
+
+卸载的代价：`gate_scan` / `gate_guard` / `gate_report` 三个工具没了（它在升级后本来就被门禁拦住、不可用）。
+**替代**：自研 `@yhb/dsh-plugin-preflight`（静态预检，仍在跑）承担安装前的排查；等上游放宽 peer 再装回。
+
+> 立场：**不做版本豁免**。豁免等于让"要求不被满足"的代码跑起来，而作者声明的 API 面对不上——
+> 那正是"崩溃或数据丢失"的来源。要恢复 gate 的能力，优先级是：① 上游出新版 ② 我们自己 fork 并**冷启动验证**（不是豁免）。
+
+## 🧩 已 fork 并安装（都是 @yhb 名下，源码在你的工作区）
+
+| 包 | 上游 | fork 改动 | 状态 |
+|---|---|---|---|
+| `@yhb/dsh-plugin-context` | `dsh-context@0.74.0`（Apache-2.0） | 包名 / patch 行 / 客户端加载器 id；vendor `zod@4.4.3` | ✅ 已安装（`applied`） |
+| `@yhb/dsh-plugin-savepoint` | `dsh-undo-savepoint@0.5.0`（MIT） | 同上三处 + **启动期快捷方式改默认关闭**（`YHB_SAVEPOINT_DESKTOP_SHORTCUT=1` 才开） | ✅ 已安装（`applied`，patch 未被它改动） |
+| `@yhb/dsh-plugin-file-upload` | `dsh-file-upload@0.5.4`（MIT） | 包名 / patch 行 / 客户端 id / 导出 name 四处；vendor 4 个纯 JS 解析器（`--ignore-scripts`） | ✅ 已安装（`applied`；默认 `markitdownBin`/`visionEndpoint` 为空 = 不 exec、不联网） |
+
+**为什么"变成你的"**：源码进 `plugins/`，升级与否由你决定，改动可读可审；代价是上游修复不会自动来，需要自己拉。
+
+**fork 的固定流程**（工具：`tools/fork-plugin.mjs`）：
+1. `screen-plugins.mjs` 看元数据（peer/体积/inject）
+2. 拉包 → `plugin_preflight` 审源码（**以它为准**，别用 grep 粗筛）
+3. `fork-plugin.mjs --src <上游目录> --slug <名字>`
+4. 检查 `dependencies` 并 vendor 进 fork 的 `node_modules`（`link:` 安装不会带依赖）
+5. `node --check` → `install_bundle` → 验证 bundles/patch 未被改动 + 无新崩溃日志
+
+## 💥 事故复盘：2026-10-25 14:15 DSH 启动崩溃
+
+**现象**：启动失败，日志显示 12 个插件"候选等待服务"，看起来像全坏了。
+
+**根因（只有一个）**：为验证一个假设，我直接用 npm 方式装了 `deepseek-harness-weixin@0.2.5`。
+它的 `dependencies` 里带着 `@deepseek-ai/dsh-credentials-local: 0.1.0-rc.7`，pnpm 把这个**旧版 harness 包**
+提进了 profile 的 `node_modules` → 与 0.2.1-rc.3 不兼容被判定禁用 → `credentials` 服务缺失 →
+必需行 `connection` 无法激活 → **host 启动失败**。
+崩溃恢复按钮随后把 `dsh.profile.bundles` 清空（只剩 base + web-app），所以看起来"所有插件都没了"。
+
+**代价**：一次崩溃 + 全部插件挂载丢失 + 一次 profile patch 还原。**没有数据损失**（会话、工件、skill 库、快照都在）。
+
+### 新规则（已写进 fork 流程）
+
+1. **安装前必查 `dependencies` 里有没有 `@deepseek-ai/*`** —— 有就**先挪到 `peerDependencies`** 再装。
+   这是唯一能"装一个插件、崩掉整个 host"的机制。（`tools/audit-profile.mjs` 会扫这一项）
+2. **每个 fork 的 patch 行 id 必须是 `yhb-*`** —— 上游可能用 `web`、`file-upload` 这类通用名，
+   会**顶掉官方行**（ds-bot 原版 `- id: web` 就是这种）。
+3. **恢复时一次 2-3 个**，每次验：三条路由 200 + 近 15 分钟无崩溃日志。别一口气全挂回来。
+4. **同类功能只挂一个**：`ds-bot` 与官方 `dsh-experimental-agent-team-profile` 有 **15 个同名工具**，
+   同时挂会分不清是谁在响应。
+5. 装 `link:` 插件时，它的 `peerDependencies` 里若含 harness 内部包（如 `dsh-agent-presets`），
+   **解析不到就是解析不到** —— 这类包不要硬修，直接放弃（weixin 就属于这种）。
+
+### 能查的工具（都在 `tools/`）
+
+| 工具 | 查什么 |
+|---|---|
+| `audit-profile.mjs` | **profile 有没有被污染**（`@deepseek-ai/*` 版本、依赖隐患、行数、备份） |
+| `check-peers.mjs` | 每个已装包的 peer/engines 是否匹配当前 harness |
+| `screen-plugins.mjs` | 候选包安装前的元数据筛（体积/inject/peer） |
+| `fork-plugin.mjs` | 把上游包 fork 成 `@yhb/dsh-plugin-*`（含三处改名） |

@@ -83,6 +83,18 @@ window.__ModuleLoader__.load({
 				".psb-err{font-size:11px;line-height:16px;color:var(--dsw-alias-label-secondary)}",
 				".psb-spin{animation:psb-spin .8s linear infinite;transform-origin:center}@keyframes psb-spin{to{transform:rotate(360deg)}}",
 				".psb-dot.loading{animation:psb-pulse .9s ease-in-out infinite}@keyframes psb-pulse{0%,100%{opacity:.45;transform:scale(.75)}50%{opacity:1;transform:scale(1.15)}}",
+				// ── 窄条（rail）也要看得见 ──────────────────────────────────
+				// 原版在 rail 下只画齿轮，金额永远不出现（作者注释："amount would not fit"），
+				// 结果是"看不见数字，也说不出哪里不对"。这里在齿轮右上角叠一个 5px 状态点：
+				// 不增加宽度，颜色 = 余额档位，呼吸动画 = 正在刷新。
+				".psb-rail{position:relative}",
+				".psb-rail-dot{position:absolute;top:1px;right:1px;width:5px;height:5px;border-radius:50%;box-shadow:0 0 0 1.5px var(--dsw-alias-bg-layer-1)}",
+				// ── 输入框下方那一条（conversation.composer.dock）────────────
+				// 与侧栏宽窄无关的第二处挂载点：只读一行文本，点击刷新。
+				".psb-dock{display:flex;align-items:center;gap:6px;padding:2px 2px 4px;font-size:11px;line-height:16px;color:var(--dsw-alias-label-tertiary);font-variant-numeric:tabular-nums;cursor:default;user-select:none}",
+				".psb-dock strong{font-weight:600;color:var(--dsw-alias-label-secondary)}",
+				".psb-dock .psb-dot{width:5px;height:5px}",
+				".psb-dock .psb-sep{opacity:.45}",
 			].join("");
 			document.head.appendChild(tag);
 		}
@@ -551,11 +563,22 @@ window.__ModuleLoader__.load({
 			});
 
 
+			// 窄条（rail）：金额放不下，但**不能再让状态消失** ——
+			// 齿轮右上角叠一个 5px 状态点（颜色 = 余额档位，呼吸 = 刷新中），
+			// 悬浮照旧出卡片。这一处是 2026-10-15 补的：原版 rail 下只画齿轮，
+			// 用户"一直看不见"，还以为插件坏了。
 			const rail = react_jsx_runtime.jsx("span", {
 				className: "psb-rail",
 				onMouseEnter: openTip,
 				onMouseLeave: closeTip,
-				children: react_jsx_runtime.jsx(GearIcon, {})
+				children: [
+					react_jsx_runtime.jsx(GearIcon, {}),
+					react_jsx_runtime.jsx("span", {
+						className: "psb-rail-dot" + (loading ? " loading" : ""),
+						"aria-hidden": true,
+						style: { background: dotColor }
+					})
+				]
 			});
 
 			// Rail (collapsed): the settings button is icon-only; keep the plain
@@ -608,6 +631,71 @@ window.__ModuleLoader__.load({
 
 
 
+		/**
+		 * 输入框下方那一条（槽位 conversation.composer.dock）。
+		 *
+		 * 存在的理由：侧栏 rail（56px 窄条）下金额放不下，而"侧栏是宽是窄"不由插件决定
+		 * —— 所以再给一处**跟侧栏无关**的挂载点。数据同样来自宿主的两条同源接口
+		 * （宿主侧有 30s TTL 缓存，两处各轮询一次也只是读缓存）。
+		 *
+		 * 刻意做简单：一行只读文本 + 点击刷新，不复制侧栏那套悬浮卡
+		 * （避免再引入定位/DOM 的坑，那正是原版最脆的部分）。
+		 */
+		function ComposerStrip(props) {
+			const t = makeT(props && props.t);
+			const [bal, setBal] = react.useState({ data: null, error: null });
+			const [go, setGo] = react.useState({ data: null, error: null });
+			const [busy, setBusy] = react.useState(false);
+
+			const load = react.useCallback(() => {
+				setBusy(true);
+				const one = (path, set) => fetch(path, { cache: "no-store" })
+					.then((res) => res.json().then((json) => {
+						if (res.ok && json && !json.error) set({ data: json, error: null });
+						else set((prev) => ({ data: prev.data, error: (json && json.error) || ("HTTP " + res.status) }));
+					}))
+					.catch((err) => set((prev) => ({ data: prev.data, error: String((err && err.message) || err) })));
+				return Promise.all([
+					one("/api/yhb-sidebar-balance/balance", setBal),
+					one("/api/yhb-sidebar-balance/opencode", setGo),
+				]).then(() => setBusy(false));
+			}, []);
+
+			react.useEffect(() => {
+				load();
+				const timer = window.setInterval(load, 60000);
+				return () => window.clearInterval(timer);
+			}, [load]);
+
+			const b = bal.data;
+			const amount = b ? (fmtCurrency(b.currency) + fmtAmount(b.total_balance)) : (bal.error ? "—" : "…");
+			const dotColor = b ? balColor(b.total_balance) : "var(--dsw-alias-label-tertiary)";
+			const goWin = go.data ? (go.data.monthly || go.data.weekly || go.data.rolling || null) : null;
+			const goPercent = goWin && typeof goWin.percent === "number" ? goWin.percent : null;
+			const label = t("ds.account") + " " + amount
+				+ "　Go " + (goPercent === null ? (go.error ? "—" : "…") : goPercent + "%");
+
+			return react_jsx_runtime.jsx("div", {
+				className: "psb-dock",
+				title: label + "（点击刷新）",
+				onClick: () => { load(); },
+				children: [
+					react_jsx_runtime.jsx("span", {
+						className: "psb-dot" + (busy ? " loading" : ""),
+						"aria-hidden": true,
+						style: { background: dotColor }
+					}),
+					react_jsx_runtime.jsx("span", { children: t("ds.account") }),
+					react_jsx_runtime.jsx("strong", { children: amount }),
+					react_jsx_runtime.jsx("span", { className: "psb-sep", children: "｜" }),
+					react_jsx_runtime.jsx("span", { children: "Go" }),
+					react_jsx_runtime.jsx("strong", {
+						children: goPercent === null ? (go.error ? "—" : "…") : goPercent + "%"
+					})
+				]
+			});
+		}
+
 		// ── cordis plugin entry ────────────────────────────────────────────
 		const inject = ["slots", "locale"];
 
@@ -657,6 +745,25 @@ window.__ModuleLoader__.load({
       if (typeof dispose === "function") dispose();
     };
   }, "yhb-sidebar-balance: trigger row");
+
+  // 第二处挂载点：输入框下方那一条（conversation.composer.dock）。
+  // 用 ctx.slots.inject(槽位名, 回调) —— 这是你 hello 插件的写法：槽位一出现才回调注册，
+  // 天生不需要自己写重试。外层 try/catch 是同一课的保险：注册失败只能变成"少一处显示",
+  // 绝不允许冒泡成 fiber failed（那等于整页起不来）。
+  try {
+    ctx.slots.inject("conversation.composer.dock", () => ctx.slots.register({
+      name: "conversation.composer.dock",
+      id: "@yhb/dsh-plugin-sidebar-balance/dock",
+      order: 40,
+      locale: NS
+    }, (props) => react_jsx_runtime.jsx(ComposerStrip, {
+      t: typeof props?.t === "function" ? props.t : undefined
+    })));
+  } catch (error) {
+    if (typeof console !== "undefined") {
+      console.warn("[yhb-sidebar-balance] composer dock registration failed", error);
+    }
+  }
 }
 
 exports.apply = apply;

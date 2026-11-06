@@ -1,0 +1,141 @@
+# dsh-file-upload
+
+**File-message plugin for DeepSeek Harness (dsh).** Claude/Codex-style uploads — drag-and-drop (files and folders), paperclip picker, paste-to-attach, multi-file support; content sniffing; fully bundled document → Markdown conversion (MarkItDown engine, 20+ formats, image OCR); Codex-style `@relative/path` references; automatic image explanations for text-only models; and a `read_document` tool for agents.
+
+[![npm](https://img.shields.io/npm/v/dsh-file-upload)](https://www.npmjs.com/package/dsh-file-upload)
+[![CI](https://github.com/HongMing-Huang/dsh-file-upload/actions/workflows/ci.yml/badge.svg)](https://github.com/HongMing-Huang/dsh-file-upload/actions/workflows/ci.yml)
+[![license](https://img.shields.io/badge/license-MIT-blue.svg)](LICENSE)
+[![Awesome DSH Plugin](https://awesome-dsh-plugin.com/badge.svg)](https://awesome-dsh-plugin.com)
+
+English | [中文](README.zh.md)
+
+> **Zero-config, install-and-use.** Every feature works out of the box with
+> sensible defaults — no Python, no downloads, no picking backends. Image
+> explanations auto-discover a vision endpoint (local Ollama → OpenAI-compatible
+> key from the dsh credentials seam).
+
+## Features
+
+- **Upload** — composer paperclip button plus a global drag-and-drop overlay ("release to attach"), multi-file support.
+- **Attachment cards** — color-coded type badges (PDF red / DOC blue / XLS green / TXT gray / ZIP purple / JSON gold) with name and size; removable.
+- **Codex-style file references** — uploaded files appear in the message as `@relative/path` references (like OpenAI Codex), never as raw content dumped into the composer; the agent reads the file with `read_document` (converted to Markdown on demand).
+- **Codex-style `@` mentions** — type `@` in the composer to pick any uploaded file by its relative path; the reference inserts as a mention.
+- **Document → Markdown, fully bundled** — the MarkItDown engine ships inside the plugin (Microsoft MarkItDown TypeScript port, `markitdown-node`): PDF / DOCX / PPTX / XLSX / HTML / CSV / JSON / XML / RSS / Atom / ZIP / Jupyter / image OCR / audio transcription. **No Python, no downloads, no setup.**
+- **Image explanation for text-only models** — upload an image and the plugin automatically generates a **description ("讲解图片")** through a vision discovery chain, so the DeepSeek API (text-only) can reason about the image: explicit `visionEndpoint` → local Ollama with a VL model (e.g. DeepSeek-VL2, zero-config) → OpenAI-compatible endpoint with a dsh-credentials key. Multimodal routes / vision bridges keep the official `read_image` path.
+- **`read_document` tool for agents** — line-numbered paging (`offset`/`limit`), byte-budgeted LRU cache (invalidated on file change), size pre-checks, reads through `ctx.fs` (inherits sandbox and fs-observation policy).
+- **Security** — loopback-only uploads, sanitized file names, session-isolated storage (`.dsh-uploads/<sessionId>`), sha256 content dedup, bounded concurrency, TTL sweep.
+
+## Install
+
+```sh
+dsh plugin --profile web add dsh-file-upload
+# restart dsh web
+```
+
+## Usage
+
+1. Click the paperclip in the composer toolbar, or drag files anywhere over the window;
+2. Files appear as attachment cards and their `@relative/path` reference is inserted into the composer — the raw content is never dumped into the chat; the agent reads the file with `read_document` when it needs the content;
+3. The agent reads documents with `read_document <path>` — converted to Markdown on demand, pageable with `offset`/`limit`.
+
+### MarkItDown (fully bundled — no downloads, no setup)
+
+**The MarkItDown capability ships inside the plugin. Works out of the box: no Python, no pip, no downloads, no build-script approval.**
+
+- **Bundled engine** — the Microsoft MarkItDown TypeScript port (`markitdown-node`) is a regular dependency covering **20+ formats**: PDF, DOCX, PPTX, XLSX, HTML, CSV, JSON, XML, RSS, Atom, ZIP, Jupyter notebooks, images (OCR via Tesseract, 110+ languages), and audio transcription (via LLM, needs model credentials).
+- **Images** — OCR to text by default through the bundled engine.
+- **Offline** — all parsing runs locally, no network calls.
+
+> Optional upgrade: if an official MarkItDown CLI already exists on your machine (or is set via `markitdownBin`), the plugin prefers it (adds EPUB and more); without one the bundled engine is always available.
+
+```yaml
+- id: dsh-file-upload
+  config:
+    markitdownBin: /path/to/your/markitdown   # optional; empty = bundled engine only
+```
+
+Startup log (bundled mode):
+
+```
+[dsh-file-upload] Document → Markdown ready: bundled MarkItDown engine (20+ formats, image OCR) — fully packaged, no downloads, no Python.
+```
+
+### How images are handled (Codex-style reference + auto-explained)
+
+Every uploaded file — images included — lands in the composer as a clean
+Codex-style `@relative/path` reference (the raw content and absolute host
+paths never appear in the chat). Images additionally get **content support**
+based on what your session's model can do, detected at upload time:
+
+| Detected route | What happens |
+|---|---|
+| **Multimodal model** (declares `image` input, e.g. GPT-4o / Qwen-VL / Claude / Gemini) | the `@reference` is inserted; the agent calls the `read_image` tool and the image enters model context directly |
+| **A `read_image` tool is registered** (official tool or a vision bridge such as dsh-vision-toolkit) | detected automatically — same native path (the model fetches the image content itself) |
+| **Text-only model** (the DeepSeek API is text-only) | if a description can be generated, the message carries `[图片: name] 图片讲解: <description>` right before the `@reference`, so the text-only model reasons about the image content immediately; if no vision endpoint is configured, only the clean `@reference` is inserted (the agent can still OCR via `read_document`) |
+
+**Vision discovery chain** (zero-config, in order): ① explicit `visionEndpoint`/`visionModel` → ② **local Ollama** at `http://localhost:11434` (picks a VL model such as DeepSeek-VL2 — images never leave the machine) → ③ **DeepSeek official vision API** (`deepseek-v4-flash-vision-exp`, uses the `DEEPSEEK_API_KEY` already configured in your DSH credentials — no extra setup) → ④ OpenAI standard endpoint using a key from the dsh credentials seam. Without any of these, images upload as plain references (no fallback text).
+
+> **DeepSeek now has an official multimodal model**: [`deepseek-v4-flash-vision-exp`](https://api-docs.deepseek.com/guides/vision/) accepts JPEG/PNG/GIF/WebP via the standard OpenAI-compatible format. The plugin's vision chain picks it up automatically through your existing DeepSeek key, so uploading an image immediately produces a high-quality `[图片: name] 图片讲解: …` block for text-only models. You can also make DSH itself route images natively: add `deepseek-v4-flash-vision-exp` as a custom model of the deepseek-official provider with `inputModalities: ["text", "image"]` (settings → Models, or the `llm-deepseek.models` settings section) and switch the session to it — the plugin then detects native image input and the agent reads images directly.
+
+Route detection mirrors the official `read_image` gate (`ctx.llm.resolveModelInfo` + `inputModalities`), plus a live check for a registered `read_image` tool.
+
+## Configuration
+
+> All fields have sensible defaults — you can install and use the plugin
+> without touching any of them. Tune only what you need.
+
+| Field | Default | Description |
+|---|---|---|
+| `uploadMaxBytes` | 25165824 (24 MB) | Max bytes per uploaded file |
+| `allowedExtensions` | `[]` | Extension allowlist; empty = all allowed |
+| `uploadTtlMs` | 604800000 (7 days) | Unreferenced upload lifetime |
+| `sweepIntervalMs` | 3600000 (1 h) | Sweep period; 0 = disabled |
+| `maxConcurrentUploads` | 4 | Concurrent upload limit |
+| `maxFileBytes` | 25165824 | Byte cap for one document read |
+| `readLimit` | 2000 | Max lines returned by one `read_document` call |
+| `sheetRowLimit` | 200 | Rows kept per XLSX sheet |
+| `maxSheets` | 5 | Sheets read per workbook |
+| `cacheEntries` | 16 | Parse-cache entry count |
+| `cacheMaxBytes` | 67108864 (64 MB) | Parse-cache byte budget |
+| `markitdownBin` | `''` | Optional MarkItDown CLI path; empty = auto-detect PATH |
+| `markitdownTimeoutMs` | 120000 | Timeout for one CLI invocation |
+| `visionEndpoint` | `''` | Vision endpoint for image explanations; empty = auto (local Ollama → OpenAI standard) |
+| `visionModel` | `''` | Vision model id; empty = auto |
+| `visionApiKeyEnv` | `OPENAI_API_KEY` | Credential reference for the vision key (dsh credentials seam) |
+| `visionMaxBytes` | 10485760 (10 MB) | Max image bytes sent to the vision endpoint |
+
+## Development
+
+```sh
+pnpm install
+pnpm build     # tsc (host) + esbuild (client bundle)
+pnpm test      # node --test
+```
+
+## Architecture
+
+```
+src/
+├── index.ts        # entry: apply + Config schema + assembly
+├── detect.ts       # content sniffing (never trusts extensions)
+├── convert.ts      # MarkItDown engine + optional CLI backend
+├── vision.ts       # image explanations (vision discovery chain)
+├── upload.ts       # upload route: loopback/session/size/dedup/TTL
+├── tool.ts         # read_document: ctx.fs reads + paging + LRU cache
+└── client/
+    └── index.tsx   # paperclip + drag (files/folders) + paste + cards
+```
+
+Dual-face plugin: `dsh.bundle` (host) + `dsh.client` (web UI). No official patches — everything uses official seams (`ctx.webServer`, `ctx.tools`, `ctx.systemPrompt`, `ctx.sessions`, `slash/input-insert-text`, `slash/input-insert-reference`).
+
+## Security
+
+- Uploads are loopback-only and same-origin checked.
+- File names are sanitized (control chars, path separators, dot segments, leading dots stripped).
+- Storage is session-isolated under the session's own workspace; unknown sessions get 403.
+- sha256 content dedup, bounded concurrency (429 on overload), TTL sweep.
+- Text extraction parses bytes, never trusts extensions; binaries are handed to the agent by path only.
+
+## License
+
+MIT

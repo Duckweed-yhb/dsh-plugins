@@ -180,21 +180,30 @@ export function apply(ctx, rawConfig = {}) {
 
 	const balanceOnce = makeCache(async () => {
 		const key = await resolveKey(ctx, cfg.balanceApiKeyEnv);
+		let keyError = null;
+		// key 存在但被吊销/打错时不能让整块面板摆烂：记下错误，继续用账户钱包兜底。
 		if (key !== null) {
-			const body = await getJSON(cfg.balanceBaseUrl, "/user/balance", key, cfg.timeoutMs);
-			const info = Array.isArray(body?.balance_infos) ? body.balance_infos[0] ?? null : null;
-			return {
-				source: "api-key",
-				is_available: body?.is_available ?? false,
-				currency: info?.currency ?? "CNY",
-				total_balance: info?.total_balance ?? null,
-				granted_balance: info?.granted_balance ?? null,
-				topped_up_balance: info?.topped_up_balance ?? null
-			};
+			try {
+				const body = await getJSON(cfg.balanceBaseUrl, "/user/balance", key, cfg.timeoutMs);
+				const info = Array.isArray(body?.balance_infos) ? body.balance_infos[0] ?? null : null;
+				return {
+					source: "api-key",
+					is_available: body?.is_available ?? false,
+					currency: info?.currency ?? "CNY",
+					total_balance: info?.total_balance ?? null,
+					granted_balance: info?.granted_balance ?? null,
+					topped_up_balance: info?.topped_up_balance ?? null
+				};
+			} catch (error) {
+				keyError = error instanceof Error ? error.message : String(error);
+			}
 		}
 		if (cfg.accountFallback) {
 			const wallet = await accountBalance(ctx);
 			if (wallet !== null) return wallet;
+		}
+		if (keyError !== null) {
+			throw new Error(`API key 那条路失败（${keyError}），宿主账号钱包也不可用`);
 		}
 		throw new Error(`未配置 DeepSeek API key(credentials: ${cfg.balanceApiKeyEnv})，且宿主账号钱包不可用`);
 	}, cfg.cacheMs);

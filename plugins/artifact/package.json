@@ -1,0 +1,79 @@
+{
+  "name": "@yhb/dsh-plugin-artifact",
+  "version": "0.8.1",
+  "description": "[fork] Claude-Code-style artifacts for dsh: an `artifact` tool that writes self-contained HTML pages and slide decks, a jump link on every call in the conversation, a right-sidebar tab that reads an artifact beside the chat, a slide editor that edits, presents and exports a deck in place, a bundled authoring skill, and an in-app artifact browser with sandboxed HTML preview （上游 dsh-artifact@0.8.1）",
+  "keywords": [
+    "dsh",
+    "dsh-plugin",
+    "deepseek-harness",
+    "artifact",
+    "html",
+    "cordis",
+    "slides",
+    "presentation"
+  ],
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/Jannchie/dsh-artifact.git"
+  },
+  "homepage": "https://github.com/Jannchie/dsh-artifact#readme",
+  "bugs": "https://github.com/Jannchie/dsh-artifact/issues",
+  "type": "module",
+  "main": "lib/index.js",
+  "exports": {
+    ".": {
+      "default": "./lib/index.js"
+    },
+    "./client": {
+      "default": "./lib/client.js"
+    },
+    "./cordis.patch.yml": "./cordis.patch.yml",
+    "./locale/*.json": "./locale/*.json",
+    "./package.json": "./package.json"
+  },
+  "files": [
+    "locale/*.json",
+    "lib/index.js",
+    "lib/client.js",
+    "lib/store.js",
+    "lib/text.js",
+    "cordis.patch.yml",
+    "README.en.md",
+    "NOTES.md",
+    "lib/deck.js"
+  ],
+  "license": "MIT",
+  "scripts": {
+    "build": "node scripts/build.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node scripts/test.mjs"
+  },
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    },
+    "client": {
+      "inject": [
+        "@deepseek-ai/dsh-api-remotes",
+        "@deepseek-ai/dsh-client-ui-renderer",
+        "@deepseek-ai/dsh-client-locale"
+      ],
+      "platform": "web"
+    }
+  },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "*",
+    "@deepseek-ai/dsh-tools": "*",
+    "@deepseek-ai/dsh-home-paths": "*",
+    "@deepseek-ai/dsh-typert-protocol": "*",
+    "@deepseek-ai/dsh-api-remotes": "*",
+    "react": "^18.2.0",
+    "@deepseek-ai/dsh-client-ui-primitives": "*",
+    "@deepseek-ai/schemastery": "^3.18.1"
+  },
+  "devDependencies": {
+    "@jannchie/slides": "^0.1.0",
+    "esbuild": "^0.28.2"
+  },
+  "private": true
+}

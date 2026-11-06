@@ -1,0 +1,5 @@
+# @yhb/dsh-plugin-savepoint —— fork 自 dsh-undo-savepoint（MIT，作者 lire1131）。
+# 改名只为让它进你自己的插件工作区，不改变行为；上游文档见 README.upstream.md。
+- insert:
+    - id: yhb-savepoint
+      name: '@yhb/dsh-plugin-savepoint'

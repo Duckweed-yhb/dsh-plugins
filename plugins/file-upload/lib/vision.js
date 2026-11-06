@@ -1,0 +1,140 @@
+/** Image description ("讲解图片") via an OpenAI-compatible vision endpoint.
+ *
+ * Mature design, endpoint auto-discovery chain:
+ *   1. explicit `visionEndpoint` + `visionModel` configuration;
+ *   2. local Ollama auto-detected (http://localhost:11434) — picks the first
+ *      vision-capable model (e.g. a locally deployed DeepSeek-VL2 or
+ *      qwen2.5-vl) — zero config, images never leave the machine;
+ *   3. DeepSeek official vision API (`deepseek-v4-flash-vision-exp`) using
+ *      the `DEEPSEEK_API_KEY` resolved from the dsh credentials seam — the
+ *      key the user already configured for DeepSeek chat works as-is;
+ *   4. standard OpenAI endpoint with a key resolved from the dsh credentials
+ *      seam (inherited env → $DSH_HOME/.credentials.yaml → project .env).
+ *
+ * The description travels with the message, so a text-only model (like the
+ * DeepSeek chat API) can reason about the image content.
+ */
+import { readFileSync, statSync } from 'node:fs';
+/** OpenAI-compatible endpoint for the DeepSeek official vision model. */
+const DEEPSEEK_VISION_ENDPOINT = 'https://api.deepseek.com/v1/chat/completions';
+/** DeepSeek official multimodal model id (per https://api-docs.deepseek.com/guides/vision/). */
+const DEEPSEEK_VISION_MODEL = 'deepseek-v4-flash-vision-exp';
+const DEEPSEEK_KEY_ENV = 'DEEPSEEK_API_KEY';
+/** Probe local Ollama and return the first vision-capable model, if any. */
+async function detectLocalOllama() {
+    try {
+        const controller = new AbortController();
+        const timer = setTimeout(() => controller.abort(), 3000);
+        try {
+            const res = await fetch('http://localhost:11434/v1/models', { signal: controller.signal });
+            if (!res.ok)
+                return null;
+            const payload = (await res.json());
+            const models = payload.data ?? [];
+            // Vision-capable heuristics: known VL model names.
+            const vision = models.find((m) => /vl|vision|llava|moondream|gemma3|internvl/i.test(m.id));
+            if (vision === undefined)
+                return null;
+            return { endpoint: 'http://localhost:11434/v1/chat/completions', model: vision.id, apiKey: 'ollama' };
+        }
+        finally {
+            clearTimeout(timer);
+        }
+    }
+    catch {
+        return null;
+    }
+}
+/** Resolve the effective vision target via the discovery chain. */
+async function resolveTarget(options) {
+    if (options.endpoint !== '') {
+        return { endpoint: options.endpoint, model: options.model !== '' ? options.model : 'gpt-4o-mini', apiKey: await options.resolveKey() };
+    }
+    const ollama = await detectLocalOllama();
+    if (ollama !== null)
+        return ollama;
+    // DeepSeek official vision: the user's DeepSeek chat key works as-is.
+    if (options.resolveEnvKey !== undefined) {
+        try {
+            const deepseekKey = await options.resolveEnvKey(DEEPSEEK_KEY_ENV);
+            if (deepseekKey !== '') {
+                return {
+                    endpoint: DEEPSEEK_VISION_ENDPOINT,
+                    model: options.model !== '' && /^deepseek/i.test(options.model) ? options.model : DEEPSEEK_VISION_MODEL,
+                    apiKey: deepseekKey
+                };
+            }
+        }
+        catch {
+            // fall through to the OpenAI standard branch
+        }
+    }
+    const key = await options.resolveKey();
+    if (key !== '') {
+        return {
+            endpoint: 'https://api.openai.com/v1/chat/completions',
+            model: options.model !== '' ? options.model : 'gpt-4o-mini',
+            apiKey: key
+        };
+    }
+    throw new Error('vision: no endpoint available (configure visionEndpoint, start local Ollama with a VL model, or set a DeepSeek/OpenAI vision API key)');
+}
+function imageDataUrl(filePath) {
+    const data = readFileSync(filePath);
+    const ext = filePath.slice(filePath.lastIndexOf('.') + 1).toLowerCase();
+    const mime = ext === 'png' ? 'image/png' : ext === 'jpg' || ext === 'jpeg' ? 'image/jpeg' : ext === 'gif' ? 'image/gif' : ext === 'webp' ? 'image/webp' : 'image/png';
+    return `data:${mime};base64,${data.toString('base64')}`;
+}
+/**
+ * Generate a description ("讲解") of an image. Throws on failure; callers
+ * degrade to path-only references.
+ */
+export async function describeImage(filePath, options) {
+    const maxBytes = options.maxBytes ?? 10 * 1024 * 1024;
+    if (statSync(filePath).size > maxBytes) {
+        throw new Error(`vision: image exceeds ${maxBytes} bytes`);
+    }
+    const target = await resolveTarget(options);
+    const controller = new AbortController();
+    const timer = setTimeout(() => controller.abort(), options.timeoutMs ?? 60000);
+    try {
+        const headers = { 'content-type': 'application/json' };
+        if (target.apiKey !== '' && target.apiKey !== 'ollama')
+            headers.authorization = `Bearer ${target.apiKey}`;
+        const res = await fetch(target.endpoint, {
+            method: 'POST',
+            headers,
+            body: JSON.stringify({
+                model: target.model,
+                messages: [
+                    {
+                        role: 'user',
+                        content: [
+                            {
+                                type: 'text',
+                                text: '请详细描述这张图片的内容,包括图中出现的文字。用用户使用的语言回答(如果无法判断则用中文)。'
+                            },
+                            { type: 'image_url', image_url: { url: imageDataUrl(filePath) } }
+                        ]
+                    }
+                ],
+                max_tokens: 500
+            }),
+            signal: controller.signal
+        });
+        if (!res.ok) {
+            const detail = (await res.text().catch(() => '')).slice(0, 200);
+            throw new Error(`vision HTTP ${res.status}: ${detail}`);
+        }
+        const payload = (await res.json());
+        const text = payload.choices?.[0]?.message?.content;
+        if (typeof text !== 'string' || text === '') {
+            throw new Error('vision response missing content');
+        }
+        return text.trim();
+    }
+    finally {
+        clearTimeout(timer);
+    }
+}
+//# sourceMappingURL=vision.js.map
